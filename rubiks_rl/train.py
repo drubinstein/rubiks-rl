@@ -1,4 +1,5 @@
 import math
+import time
 
 import torch
 from gymnasium import spaces
@@ -65,12 +66,16 @@ def main():
 
     model = RecurrentPPO.load("rubiks")
 
-    obs = vec_env.reset()
+    env = RubiksCube()
+    obs, _ = env.reset()
     while True:
-        action, _states = model.predict(obs)
-        obs, rewards, dones, info = vec_env.step(action)
-        print("Reward:", rewards)
-        print(obs)
+        action, _state = model.predict(obs)
+        obs, reward, done, truncated, info = env.step(action)
+        print("Reward:", reward)
+        print(env.render())
+        if done:
+            break
+        time.sleep(0.2)
 
 
 if __name__ == "__main__":
