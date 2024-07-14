@@ -1,14 +1,14 @@
+import argparse
 import math
 import time
 
 import torch
+import torch.backends
 from gymnasium import spaces
 from positional_encodings.torch_encodings import PositionalEncoding1D
+from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from sb3_contrib import RecurrentPPO
-import torch.backends
-
 
 from rubiks_rl.environment import RubiksCube
 
@@ -45,7 +45,13 @@ class AttentionExtractor(BaseFeaturesExtractor):
 
 
 def main():
-    vec_env = make_vec_env(lambda: RubiksCube(shuffle=True), 16)
+    parser = argparse.ArgumentParser("Rubik's Cube RL Trainer")
+    parser.add_argument(
+        "--n-rows", type=int, default=3, help="Number of rows and columns in the cube."
+    )
+    args = parser.parse_args()
+
+    vec_env = make_vec_env(lambda: RubiksCube(shuffle=True, n_rows=args.n_rows), 8)
     model = RecurrentPPO(
         "MlpLstmPolicy",
         vec_env,

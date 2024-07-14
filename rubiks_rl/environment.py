@@ -1,23 +1,12 @@
+import argparse
 import random
 from enum import Enum
+from functools import cached_property
 from typing import Any, SupportsFloat
 
 import gymnasium as gym
 import numpy as np
-from gymnasium.core import RenderFrame, ObsType
-
-
-# Simplified action space
-# can only move in two directions
-# reverse rotations are equivalent to
-# 3 turns in the opposite direction anyway
-class Action(Enum):
-    ROTATE_TOP_LEFT = 0
-    ROTATE_MIDDLE_LEFT = 1
-    ROTATE_BOTTOM_LEFT = 2
-    ROTATE_LEFT_DOWN = 3
-    ROTATE_MIDDLE_DOWN = 4
-    ROTATE_RIGHT_DOWN = 5
+from gymnasium.core import ObsType, RenderFrame
 
 
 # Yes this is way over engineered
@@ -32,35 +21,33 @@ class Face(Enum):
     RIGHT = 5
 
 
-# this could be modular tbh
-class Row(Enum):
-    TOP = 0
-    MIDDLE = 1
-    BOTTOM = 2
-
-
-class Col(Enum):
-    LEFT = 0
-    MIDDLE = 1
-    RIGHT = 2
-
-
 class RubiksCube(gym.Env):
-    observation_space = gym.spaces.Box(
-        shape=(len(Face), len(Row), len(Col)),
-        low=Face.TOP.value,
-        high=Face.RIGHT.value,
-        dtype=np.uint8,
-    )
-    action_space = gym.spaces.Discrete(5)
-
-    def __init__(self, shuffle: bool = True):
+    def __init__(self, shuffle: bool = True, n_rows: int = 3):
         self.shuffle = shuffle
+        self.n_rows = n_rows
+
+    @cached_property
+    def observation_space(self):
+        return gym.spaces.Box(
+            shape=(len(Face), self.n_rows, self.n_rows),
+            low=Face.TOP.value,
+            high=Face.RIGHT.value,
+            dtype=np.uint8,
+        )
+
+    # The action space maps to either moving a row to the left or a column down
+    # SB3 doesn't support dictionary action spaces
+    # Encoding is
+    #  - [0, n_rows) means move row left
+    #  - [n_rows, n_rows+n_rows) menas move column down
+    @cached_property
+    def action_space(self):
+        return gym.spaces.Discrete(self.n_rows + self.n_rows)
 
     def reset(self, seed: int | None = None) -> tuple[ObsType, dict[str, Any]]:
         self.cube = np.tile(
             np.reshape(np.arange(len(Face), dtype=np.uint8), (len(Face), 1, 1)),
-            (1, len(Row), len(Col)),
+            (1, self.n_rows, self.n_rows),
         )
 
         if self.shuffle:
@@ -84,65 +71,68 @@ class RubiksCube(gym.Env):
         return self.cube, step_reward, done, False, {"total_reward": self.current_reward}
 
     def run_action(self, action: int):
-        action = Action(action)
-        if action == Action.ROTATE_TOP_LEFT:
-            self.cube[Face.TOP.value] = np.rot90(self.cube[Face.TOP.value])
-            self.rotate_row(Row.TOP)
-        elif action == Action.ROTATE_MIDDLE_LEFT:
-            self.rotate_row(Row.MIDDLE)
-        elif action == Action.ROTATE_BOTTOM_LEFT:
-            self.cube[Face.BOTTOM.value] = np.rot90(self.cube[Face.BOTTOM.value])
-            self.rotate_row(Row.BOTTOM)
-        elif action == Action.ROTATE_LEFT_DOWN:
-            self.cube[Face.LEFT.value] = np.rot90(self.cube[Face.LEFT.value])
-            self.rotate_col(Col.LEFT)
-        elif action == Action.ROTATE_MIDDLE_DOWN:
-            self.rotate_col(Col.MIDDLE)
-        elif action == Action.ROTATE_RIGHT_DOWN:
-            self.cube[Face.TOP.value] = np.rot90(self.cube[Face.RIGHT.value])
-            self.rotate_col(Col.RIGHT)
+        if action < self.n_rows:
+            if action == 0:
+                self.cube[Face.TOP.value] = np.rot90(self.cube[Face.TOP.value])
+            if action == self.n_rows - 1:
+                self.cube[Face.BOTTOM.value] = np.rot90(self.cube[Face.BOTTOM.value])
+            self.rotate_row(action)
+        else:
+            action -= self.n_rows
+            if action == 0:
+                self.cube[Face.LEFT.value] = np.rot90(self.cube[Face.LEFT.value])
+            if action == self.n_rows - 1:
+                self.cube[Face.TOP.value] = np.rot90(self.cube[Face.RIGHT.value])
+            self.rotate_col(action)
 
     def render(self) -> RenderFrame | list[RenderFrame] | None:
-        grid = np.zeros((9, 12), dtype=np.uint8) - 1
-        grid[:3, :3] = self.cube[Face.TOP.value]
-        grid[6:, :3] = self.cube[Face.BOTTOM.value]
+        grid = np.zeros((3 * self.n_rows, 4 * self.n_rows), dtype=np.uint8) - 1
+        grid[: self.n_rows, : self.n_rows] = self.cube[Face.TOP.value]
+        grid[2 * self.n_rows :, : self.n_rows] = self.cube[Face.BOTTOM.value]
         for i, face in enumerate([Face.FRONT, Face.RIGHT, Face.BACK, Face.LEFT]):
-            grid[3:6, 3 * i : 3 * (i + 1)] = self.cube[face.value]
+            grid[self.n_rows : 2 * self.n_rows, self.n_rows * i : self.n_rows * (i + 1)] = (
+                self.cube[face.value]
+            )
         return grid
 
     def reward(self):
-        # The reward is calculated by checking how much of each face matches the center of each face
-        return np.sum(
-            np.reshape(self.cube[:, Row.MIDDLE.value, Col.MIDDLE.value], (-1, 1, 1)) == self.cube
-        )
+        # The reward is calculated by checking how much of each face matches the upper left corner of
+        # each face
+        return np.sum(np.reshape(self.cube[:, 0, 0], (-1, 1, 1)) == self.cube)
 
     # there's a more mathy way of doing this tbh
-    def rotate_row(self, row: Row):
+    def rotate_row(self, row: int):
         for old_face, new_face in (
             (Face.FRONT, Face.RIGHT),
             (Face.RIGHT, Face.BACK),
             (Face.BACK, Face.LEFT),
         ):
             # Could be a more efficient swap
-            old = self.cube[old_face.value, row.value, :].copy()
-            new = self.cube[new_face.value, row.value, :].copy()
-            self.cube[old_face.value, row.value, :] = new
-            self.cube[new_face.value, row.value, :] = old
+            old = self.cube[old_face.value, row, :].copy()
+            new = self.cube[new_face.value, row, :].copy()
+            self.cube[old_face.value, row, :] = new
+            self.cube[new_face.value, row, :] = old
 
-    def rotate_col(self, col: Col):
+    def rotate_col(self, col: int):
         for old_face, new_face in (
             (Face.FRONT, Face.TOP),
             (Face.TOP, Face.BACK),
             (Face.BACK, Face.BOTTOM),
         ):
-            old = self.cube[old_face.value, :, col.value].copy()
-            new = self.cube[new_face.value, :, col.value].copy()
-            self.cube[old_face.value, :, col.value] = new
-            self.cube[new_face.value, :, col.value] = old
+            old = self.cube[old_face.value, :, col].copy()
+            new = self.cube[new_face.value, :, col].copy()
+            self.cube[old_face.value, :, col] = new
+            self.cube[new_face.value, :, col] = old
 
 
 if __name__ == "__main__":
-    env = RubiksCube(shuffle=False)
+    parser = argparse.ArgumentParser("Rubik's Cube Environment Simulator")
+    parser.add_argument(
+        "--n-rows", type=int, default=3, help="Number of rows and columns in the cube."
+    )
+    args = parser.parse_args()
+
+    env = RubiksCube(shuffle=False, n_rows=args.n_rows)
     env.reset()
 
     print("Welcome to Rubiks Env")
@@ -150,7 +140,8 @@ if __name__ == "__main__":
     print()
 
     while True:
-        action = Action(int(input("Action (0-5): ")))
+        action = int(input(f"Action (0-{env.action_space.n-1}): "))
+
         env.step(action)
         print("Performing action:", action)
         print("State: ")
