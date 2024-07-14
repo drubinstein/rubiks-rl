@@ -64,7 +64,7 @@ def main():
         model.policy = model.policy.to(device="cuda")
 
     model.policy.compile(mode=mode)
-    model.learn(total_timesteps=10_000, progress_bar=True)
+    model.learn(total_timesteps=50_000, progress_bar=True)
 
     model.save("rubiks")
 

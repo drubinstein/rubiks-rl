@@ -130,9 +130,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n-rows", type=int, default=3, help="Number of rows and columns in the cube."
     )
+    parser.add_argument(
+        "--shuffle", action='store_true', default=False, help="Shuffle cube upon initialization."
+    )
     args = parser.parse_args()
 
-    env = RubiksCube(shuffle=False, n_rows=args.n_rows)
+    env = RubiksCube(shuffle=args.shuffle, n_rows=args.n_rows)
     env.reset()
 
     print("Welcome to Rubiks Env")
