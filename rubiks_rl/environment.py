@@ -142,8 +142,9 @@ if __name__ == "__main__":
     print(env.render())
     print()
 
+    action = 0
     while True:
-        action = int(input(f"Action (0-{env.action_space.n-1}): "))
+        action = int(input(f"Action (0-{env.action_space.n-1}): ") or action)
 
         env.step(action)
         print("Performing action:", action)
