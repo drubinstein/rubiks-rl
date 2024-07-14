@@ -29,7 +29,7 @@ class AttentionExtractor(BaseFeaturesExtractor):
         self.multihead_attn = torch.nn.MultiheadAttention(
             embed_dim=n_heads * n_emb, num_heads=n_heads, batch_first=True
         )
-        self.linear = torch.nn.Linear(648, features_dim)
+        self.linear = torch.nn.Linear(288, features_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Something is casting to float...ugh
@@ -64,7 +64,7 @@ def main():
         model.policy = model.policy.to(device="cuda")
 
     model.policy.compile(mode=mode)
-    model.learn(total_timesteps=2_500_000, progress_bar=True)
+    model.learn(total_timesteps=10_000, progress_bar=True)
 
     model.save("rubiks")
 
@@ -72,7 +72,7 @@ def main():
 
     model = RecurrentPPO.load("rubiks")
 
-    env = RubiksCube()
+    env = RubiksCube(shuffle=True, n_rows=args.n_rows)
     obs, _ = env.reset()
     while True:
         action, _state = model.predict(obs)

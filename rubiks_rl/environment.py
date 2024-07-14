@@ -63,7 +63,7 @@ class RubiksCube(gym.Env):
     def step(self, action: int) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         self.run_action(action)
         reward = self.reward()
-        done = reward == len(Face) * 9
+        done = reward == len(Face) * (self.n_rows**2)
         step_reward = reward - self.current_reward
         self.current_reward = reward
 
@@ -82,7 +82,7 @@ class RubiksCube(gym.Env):
             if action == 0:
                 self.cube[Face.LEFT.value] = np.rot90(self.cube[Face.LEFT.value])
             if action == self.n_rows - 1:
-                self.cube[Face.TOP.value] = np.rot90(self.cube[Face.RIGHT.value])
+                self.cube[Face.RIGHT.value] = np.rot90(self.cube[Face.RIGHT.value])
             self.rotate_col(action)
 
     def render(self) -> RenderFrame | list[RenderFrame] | None:
