@@ -68,11 +68,22 @@ class RubiksCube(gym.Env):
                 seed = random.randint(0, 128)
             seed = seed % 128
             for _ in range(seed):
-                self.step(self.action_space.sample())
+                self.run_action(self.action_space.sample())
+        self.current_reward = self.reward()
 
-        return self.cube, {}
+        return self.cube, {"total_reward": self.current_reward}
 
     def step(self, action: int) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        self.run_action(action)
+        reward = self.reward()
+        done = reward == len(Face) * 9
+        step_reward = reward - self.current_reward
+        self.current_reward = reward
+
+        # TODO: Truncated
+        return self.cube, step_reward, done, False, {"total_reward": self.current_reward}
+
+    def run_action(self, action: int):
         action = Action(action)
         if action == Action.ROTATE_TOP_LEFT:
             self.cube[Face.TOP.value] = np.rot90(self.cube[Face.TOP.value])
@@ -90,11 +101,6 @@ class RubiksCube(gym.Env):
         elif action == Action.ROTATE_RIGHT_DOWN:
             self.cube[Face.TOP.value] = np.rot90(self.cube[Face.RIGHT.value])
             self.rotate_col(Col.RIGHT)
-
-        done = self.reward == len(Face) * 9
-
-        # TODO: Truncated
-        return self.cube, self.reward(), done, False, {}
 
     def render(self) -> RenderFrame | list[RenderFrame] | None:
         grid = np.zeros((9, 12), dtype=np.uint8) - 1

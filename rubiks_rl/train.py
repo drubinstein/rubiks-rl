@@ -22,14 +22,14 @@ class AttentionExtractor(BaseFeaturesExtractor):
         super().__init__(observation_space, features_dim)
 
         # 6 faces i.e. 6 classes
-        n_heads = 8
+        n_heads = 6
         n_emb = next_power_of_2(int(math.ceil(6**0.25)))
         self.embeddings = torch.nn.Embedding(6, n_heads * n_emb)
         self.positional_encoding = PositionalEncoding1D(n_heads * n_emb)
         self.multihead_attn = torch.nn.MultiheadAttention(
             embed_dim=n_heads * n_emb, num_heads=n_heads, batch_first=True
         )
-        self.linear = torch.nn.Linear(864, features_dim)
+        self.linear = torch.nn.Linear(648, features_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Something is casting to float...ugh
@@ -58,7 +58,7 @@ def main():
         model.policy = model.policy.to(device="cuda")
 
     model.policy.compile(mode=mode)
-    model.learn(total_timesteps=250_000, progress_bar=True)
+    model.learn(total_timesteps=2_500_000, progress_bar=True)
 
     model.save("rubiks")
 
@@ -71,11 +71,11 @@ def main():
     while True:
         action, _state = model.predict(obs)
         obs, reward, done, truncated, info = env.step(action)
-        print("Reward:", reward)
+        print("Reward:", info["total_reward"])
         print(env.render())
         if done:
             break
-        time.sleep(0.2)
+        # time.sleep(0.2)
 
 
 if __name__ == "__main__":
