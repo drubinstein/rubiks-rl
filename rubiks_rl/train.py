@@ -43,6 +43,23 @@ class AttentionExtractor(BaseFeaturesExtractor):
         x = self.linear(x)
         return x
 
+class MLPExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space: spaces.Box, features_dim: int = 64):
+        super().__init__(observation_space, features_dim)
+        self.positional_encoding = PositionalEncoding1D(6)
+        self.linear = torch.nn.Linear(144, 144)
+        self.linear_2 = torch.nn.Linear(144, features_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.long()
+        x = x.flatten(start_dim=1)
+        x = torch.nn.functional.one_hot(x, num_classes=6).float()
+        x = self.positional_encoding(x)
+        x = x.flatten(start_dim=1)
+        x = self.linear(x)
+        x = self.linear_2(x)
+        return x
+
 
 def main():
     parser = argparse.ArgumentParser("Rubik's Cube RL Trainer")
